@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>HDBSCAN Hotspot Analysis</title>
+
+    <!-- Leaflet -->
+    <link
+            rel="stylesheet"
+            href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <script
+            src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+    </script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f6f9;
+            padding: 20px;
+        }
+
+        #map {
+            height: 650px;
+            width: 100%;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        h2 {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+<h2>HDBSCAN Clustering Results</h2>
+<div id="map"></div>
+
+<script th:inline="javascript">
+    /*<![CDATA[*/
+
+        // ===== DATA FROM SPRING =====
+        const points = /*[[${points}]]*/ [];
+
+        console.log("Raw points from backend:", points);
+        console.log("Points length:", points.length);
+
+        if (points.length === 0) {
+            console.warn("⚠️ No points received!");
+        }
+
+        // ===== MAP INIT =====
+        const map = L.map('map').setView([28.0, 113.0], 5);
+
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        console.log("Map initialized");
+
+        // ===== CLUSTER COLORS =====
+        function getMarkerOptions(clusterId) {
+            const colors = [
+                '#e74c3c', '#3498db', '#2ecc71',
+                '#f1c40f', '#9b59b6', '#1abc9c'
+            ];
+
+            return {
+                radius: 8,
+                fillColor: clusterId === -1
+                    ? '#95a5a6'
+                    : colors[Math.abs(clusterId) % colors.length],
+                color: '#000',
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 0.85
+            };
+        }
+
+        // ===== OPTIONAL REVERSE GEOCODING =====
+        async function fetchAddress(lat, lng) {
+            try {
+                const res = await fetch(
+                    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`
+                );
+                const data = await res.json();
+                return data.display_name || "Unknown location";
+            } catch (e) {
+                console.error("Reverse geocoding failed", e);
+                return "Address unavailable";
+            }
+        }
+
+        // ===== RENDER POINTS =====
+        async function renderPoints() {
+
+            console.log("Rendering points...");
+
+            for (let i = 0; i < points.length; i++) {
+                const p = points[i];
+                console.log(`Point ${i}:`, p);
+
+                if (!p.lat || !p.lng) {
+                    console.warn("Invalid point skipped:", p);
+                    continue;
+                }
+
+                const address = await fetchAddress(p.lat, p.lng);
+
+                L.circleMarker([p.lat, p.lng], getMarkerOptions(p.clusterId))
+                    .addTo(map)
+                    .bindPopup(`
+                        <b>Cluster:</b>
+                        ${p.clusterId === -1 ? 'Noise (Outlier)' : p.clusterId}<br>
+                        <small>${address}</small><br>
+                        <small>${p.lat}, ${p.lng}</small>
+                    `);
+            }
+
+            console.log("All points rendered");
+        }
+
+        renderPoints();
+
+    /*]]>*/
+</script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hotspot Analysis - Location Names</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        #map { height: 600px; width: 100%; border-radius: 10px; }
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; }
+        .loading { color: gray; font-style: italic; }
+    </style>
+</head>
+<body>
+<h1>Hotspot Analysis: Geocoded Locations</h1>
+<p id="status" class="loading">Fetching location names...</p>
+<div id="map"></div>
+
+<script>
+    const hotspots = [
+        { lat: 30.5083435896964, lng: 120.15558307115568 },
+        { lat: 24.96694252802233, lng: 102.71125686392716 },
+        { lat: 25.48582021595633, lng: 119.19448881263372 }
+    ];
+
+    const map = L.map('map').setView([28.0, 115.0], 5);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    async function getStandardAddress(lat, lon) {
+        try {
+            // Using zoom=18 for high precision and accept-language=en
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1&accept-language=en`);
+            const data = await response.json();
+            const a = data.address;
+
+            if (!a) return "Address Not Found";
+
+            // Select only standard official administrative fields
+            const parts = [
+                a.road || a.pedestrian || a.street,    // Street
+                a.suburb || a.neighbourhood,           // Sub-district
+                a.city_district || a.county,           // District/County
+                a.city || a.town || a.municipality,    // Prefecture/City
+                a.state || a.province,                 // Province
+                a.country                              // Country
+            ];
+
+            // Filter out empty parts and join with a standard comma and space
+            return parts.filter(part => part !== undefined).join(", ");
+
+        } catch (error) {
+            return "Connection Error";
+        }
+    }
+
+    async function loadMarkers() {
+        for (let i = 0; i < hotspots.length; i++) {
+            const officialAddress = await getStandardAddress(hotspots[i].lat, hotspots[i].lng);
+
+            L.marker([hotspots[i].lat, hotspots[i].lng])
+             .addTo(map)
+             .bindPopup(`
+                <div style="font-family: Arial; font-size: 14px;">
+                    <strong>Official Location ${i+1}</strong><br>
+                    <hr>
+                    ${officialAddress}
+                </div>
+             `);
+        }
+        document.getElementById('status').innerText = "Standardized addresses loaded.";
+    }
+
+    loadMarkers();
+</script>
+</body>
+</html>
