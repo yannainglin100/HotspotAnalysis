@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <title>Lumina | City Management</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+  <style>
+    body { background-color: #f8f9fa; }
+    .sidebar { height: 100vh; background-color: #87CEEB; color: white; position: fixed; width: 250px; padding-top: 20px; }
+    .sidebar a { color: white; text-decoration: none; padding: 10px 20px; display: block; transition: 0.3s; }
+    .sidebar a:hover { background-color: #00BFFF; }
+    .main-content { margin-left: 250px; padding: 50px; }
+    .bg-sky { background-color: #87CEEB !important; color: white !important; }
+
+    .btn-sm i { font-size: 0.9rem; vertical-align: middle; }
+    .btn-outline-primary:hover { background-color: #87CEEB; border-color: #87CEEB; }
+    #citySearch:focus { border-color: #00BFFF; box-shadow: 0 0 0 0.2rem rgba(135, 206, 235, 0.25); }
+    .fa-exclamation-triangle { animation: blinker 1.5s linear infinite; }
+    @keyframes blinker { 50% { opacity: 0.5; } }
+
+    /* Fixed table widths */
+    .table { table-layout: fixed; }
+    .col-name { width: 50%; }
+    .col-pop { width: 15%; }
+    .col-actions { width: 35%; }
+  </style>
+</head>
+<body>
+
+<div class="sidebar shadow">
+  <div class="d-flex align-items-center justify-content-center">
+    <img src="/images/lumina-logo.png" class="rounded-circle" style="width: 70px; height: 70px; object-fit: cover;">
+    <h4 class="ms-1 mb-0 text-white fw-bold">Lumina</h4>
+  </div>
+  <hr class="mx-3 text-white">
+  <div class="mt-3">
+    <a th:href="@{/admin/provinces}">Provinces</a>
+    <a th:href="@{/admin/cities}" class="fw-bold bg-white text-dark shadow-sm">Cities</a>
+    <a th:href="@{/admin/case-types}">Case Types</a>
+    <a href="#">Crime Records</a>
+    <a href="#">Analysis</a>
+  </div>
+</div>
+
+<div class="main-content">
+  <div class="card shadow-sm border-0">
+    <div class="card-header bg-sky d-flex justify-content-between align-items-center p-3">
+      <div class="d-flex align-items-center">
+        <h5 class="mb-0 me-3">City Management</h5>
+        <select class="form-select form-select-sm border-0 shadow-sm" style="width: 200px;"
+                onchange="location.href='/admin/cities?provinceId=' + this.value">
+          <option value="0" th:selected="${selectedProvinceId == 0}">-- No Province --</option>
+          <option th:each="p : ${provinces}" th:value="${p.province_id}"
+                  th:text="${p.province_en}" th:selected="${p.province_id == selectedProvinceId}"></option>
+        </select>
+      </div>
+
+      <div class="d-flex align-items-center">
+        <div class="input-group input-group-sm me-3" style="width: 250px;">
+          <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+          <input type="text" id="citySearch" onkeyup="filterCities()" class="form-control" placeholder="Search...">
+        </div>
+        <button class="btn btn-light btn-sm" onclick="prepareAdd()"><i class="fas fa-plus me-1"></i> Add New</button>
+      </div>
+    </div>
+
+    <div class="card-body">
+      <table class="table table-hover">
+        <thead>
+        <tr>
+          <th class="col-name">City Name</th>
+          <th class="col-pop text-end">Population</th> <th class="col-actions text-end">Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="c : ${cities}">
+          <td th:text="${c.city_en}"></td>
+          <td class="text-end" th:text="${c.population != null ? #numbers.formatInteger(c.population, 3, 'COMMA') : '0'}"></td>
+          <td class="text-end">
+            <button class="btn btn-outline-primary btn-sm me-2"
+                    th:data-id="${c.city_id}" th:data-name="${c.city_en}"
+                    th:data-pop="${c.population}"
+                    th:data-pid="${c.province != null ? c.province.province_id : ''}"
+                    onclick="editCity(this)" title="Edit">
+              <i class="fas fa-pencil-alt"></i>
+            </button>
+            <button class="btn btn-outline-danger btn-sm"
+                    th:data-id="${c.city_id}" th:data-name="${c.city_en}"
+                    onclick="prepareDeleteCity(this)" title="Delete">
+              <i class="fas fa-trash-can"></i>
+            </button>
+          </td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="cityModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form th:action="@{/admin/cities/save}" method="post" id="cityForm"
+          onsubmit="return validatePopulation()" class="modal-content">
+      <input type="hidden" name="selectedProvinceId" th:value="${selectedProvinceId}">
+
+      <div class="modal-header bg-sky text-white">
+        <h5 class="modal-title" id="modalTitle">City Details</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" name="city_id" id="city_id">
+        <div class="mb-3">
+          <label class="form-label">Province</label>
+          <select name="province.province_id" id="modal_province_id" class="form-select">
+            <option value="0">-- No Province --</option>
+            <option th:each="p : ${provinces}"
+                    th:value="${p.province_id}"
+                    th:text="${p.province_en}"></option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">City Name</label>
+          <input type="text" name="city_en" id="city_en" class="form-control" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Population</label>
+          <input type="number" name="population" id="population" class="form-control" min="1">
+          <div class="invalid-feedback">
+            Please enter a population greater than 0.
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="submit" class="btn bg-sky">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">Confirm Deletion</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body py-4">
+        <div class="d-flex align-items-center">
+          <div class="flex-shrink-0"><i class="fas fa-exclamation-triangle fa-3x text-danger"></i></div>
+          <div class="flex-grow-1 ms-3">
+            <p class="mb-1">You are deleting:</p>
+            <h5 class="text-dark fw-bold" id="deleteCityNameDisplay"></h5>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer bg-light">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <a id="confirmDeleteBtn" href="#" class="btn btn-danger">Confirm Delete</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script th:inline="javascript">
+  const cityModal = new bootstrap.Modal(document.getElementById('cityModal'));
+  const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+  const selectedProvinceId = [[${selectedProvinceId}]];
+
+  function prepareAdd() {
+      document.getElementById('city_id').value = '';
+      document.getElementById('city_en').value = '';
+      document.getElementById('population').value = '';
+      document.getElementById('modal_province_id').value = (selectedProvinceId != 0) ? selectedProvinceId : '';
+      document.getElementById('modalTitle').innerText = 'Add New City';
+      cityModal.show();
+  }
+
+  function editCity(btn) {
+      document.getElementById('city_id').value = btn.getAttribute('data-id');
+      document.getElementById('city_en').value = btn.getAttribute('data-name');
+      document.getElementById('population').value = btn.getAttribute('data-pop');
+      document.getElementById('modal_province_id').value = btn.getAttribute('data-pid');
+      document.getElementById('modalTitle').innerText = 'Edit City';
+      cityModal.show();
+  }
+
+  function prepareDeleteCity(btn) {
+      const id = btn.getAttribute('data-id');
+      const name = btn.getAttribute('data-name');
+      document.getElementById('deleteCityNameDisplay').innerText = name;
+      // Redirect back to same filter after delete
+      document.getElementById('confirmDeleteBtn').setAttribute('href', `/admin/cities/delete/${id}?provinceId=${selectedProvinceId}`);
+      deleteModal.show();
+  }
+
+  function filterCities() {
+    const filter = document.getElementById("citySearch").value.toLowerCase();
+    const rows = document.querySelectorAll("table tbody tr");
+    rows.forEach(row => {
+        const text = row.innerText.toLowerCase();
+        row.style.display = text.includes(filter) ? "" : "none";
+    });
+  }
+
+  function validatePopulation() {
+    const popInput = document.getElementById('population');
+    const populationValue = parseInt(popInput.value);
+
+    // Check if the value is less than or equal to 0
+    if (isNaN(populationValue) || populationValue <= 0) {
+        alert("Population must be a positive number greater than 0.");
+        popInput.focus();
+        popInput.classList.add('is-invalid'); // Adds a red border (Bootstrap)
+        return false; // Prevents the form from being sent to the server
+    }
+
+    popInput.classList.remove('is-invalid');
+    return true; // Form is valid, proceed with save
+}
+</script>
+</body>
+</html>
