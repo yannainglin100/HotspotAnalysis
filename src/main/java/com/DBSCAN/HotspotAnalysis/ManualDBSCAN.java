@@ -236,7 +236,7 @@ public class ManualDBSCAN implements CommandLineRunner {
 
     // ==================== PARAMETER MATH ====================
     public static double calculateOptimalEpsilon(List<Point> points, int minPts) {
-        return 500;
+        return 1800;
     }
 
     public static int calculateOptimalMinPts(List<Point> points, double epsilon) {

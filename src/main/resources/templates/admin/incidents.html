@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Lumina | Crime Record Management</title>
+    <link rel="icon" type="image/png" href="/images/lumina-logo.png">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        body { background-color: #f8f9fa; }
+        .sidebar { height: 100vh; background-color: #87CEEB; color: white; position: fixed; width: 250px; padding-top: 20px; z-index: 1000; }
+        .sidebar a { color: white; text-decoration: none; padding: 10px 20px; display: block; transition: 0.3s; }
+        .sidebar a:hover { background-color: #00BFFF; }
+        .main-content { margin-left: 250px; padding: 40px; }
+        .bg-sky { background-color: #87CEEB !important; color: white !important; }
+
+        /* Prominent Pagination Styling */
+        .pagination-container { background-color: #87CEEB; padding: 15px; border-radius: 0 0 10px 10px; }
+        .pagination .page-link {
+            color: #333;
+            font-weight: bold;
+            font-size: 1.1rem;
+            border: none;
+            margin: 0 5px;
+            border-radius: 5px !important;
+        }
+        .pagination .page-item.active .page-link {
+            background-color: #00BFFF !important;
+            color: white !important;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .pagination .page-item.disabled .page-link { background: rgba(255,255,255,0.3); color: #666; }
+
+        /* Twinkle Animation for the Warning Icon */
+        @keyframes twinkle {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        .twinkle-icon {
+            animation: twinkle 1.5s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body>
+
+<div class="sidebar shadow">
+    <div class="d-flex align-items-center justify-content-center mb-3">
+        <img src="/images/lumina-logo.png" class="rounded-circle" style="width: 60px; height: 60px; object-fit: cover;">
+        <h4 class="ms-2 mb-0 fw-bold">Lumina</h4>
+    </div>
+    <hr class="mx-3">
+    <a th:href="@{/admin/provinces}">Provinces</a>
+    <a th:href="@{/admin/cities}">Cities</a>
+    <a th:href="@{/admin/case-types}">Case Types</a>
+    <a th:href="@{/admin/incidents}" class="fw-bold bg-white text-dark shadow-sm">Crime Records</a>
+    <a href="#">Analysis</a>
+</div>
+
+<div class="main-content">
+    <div class="card border-0 shadow-sm" style="border-radius: 10px;">
+        <div class="card-header bg-sky p-3" style="border-radius: 10px 10px 0 0;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0 text-white fw-bold">Crime Record Management</h5>
+                <button class="btn btn-light btn-sm" onclick="prepareAdd()"><i class="fas fa-plus me-1"></i> Add New</button>
+            </div>
+
+            <form id="filterForm" method="get" th:action="@{/admin/incidents}" class="row g-2">
+                <div class="col-md-3">
+                    <select style="height:40px" name="provinceId" class="form-select form-select-sm" onchange="updateCities(this.value)">
+                        <option value="0" th:selected="${selP == 0}">-- No Province --</option>
+                        <option th:each="p : ${provinces}" th:value="${p.province_id}" th:text="${p.province_en}" th:selected="${p.province_id == selP}"></option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select style="height:40px" name="cityId" id="fCity" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option th:each="c : ${cities}" th:value="${c.city_id}" th:text="${c.city_en}" th:selected="${c.city_id == selC}"></option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select style="height:40px" name="caseTypeId" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option th:each="ct : ${caseTypes}" th:value="${ct.case_type_id}" th:text="${ct.case_type_en}" th:selected="${ct.case_type_id == selCT}"></option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select style="height:40px" name="year" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option th:each="y : ${years}" th:value="${y}" th:text="${y}" th:selected="${y == selY}"></option>
+                    </select>
+                </div>
+            </form>
+        </div>
+
+        <div class="card-body p-0">
+            <div th:if="${#lists.isEmpty(incidents)}" class="text-center p-5">
+                <i class="fas fa-folder-open fa-4x text-muted mb-3"></i>
+                <h4 class="text-muted">No Records Found</h4>
+                <h5 class="text-secondary">There are no crime records matching your current filter criteria.</h5>
+            </div>
+
+            <table th:unless="${#lists.isEmpty(incidents)}" class="table table-hover mb-0">
+                <thead class="table-light">
+                <tr>
+                    <th class="ps-4">Latitude</th>
+                    <th>Longitude</th>
+                    <th>Datetime</th>
+                    <th class="text-center" style="width: 15%">Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="i : ${incidents}">
+                    <td class="ps-4" th:text="${i.latitude}"></td>
+                    <td th:text="${i.longitude}"></td>
+                    <td th:text="${#temporals.format(i.formattedDatetime, 'yyyy-MM-dd HH:mm:ss')}"></td>
+                    <td class="text-center">
+                        <button class="btn btn-outline-primary btn-sm me-1"
+                                th:onclick="prepareEdit([[${i.id}]], [[${selP}]], [[${i.city.city_id}]], [[${i.caseType.case_type_id}]], [[${i.latitude}]], [[${i.longitude}]], [[${i.formattedDatetime}]])">
+                            <i class="fas fa-pencil-alt"></i>
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm"
+                                th:onclick="confirmDelete([[${i.id}]], [[${i.formattedId}]])">
+                            <i class="fas fa-trash-can"></i>
+                        </button>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pagination-container d-flex justify-content-center" th:if="${totalPages > 1}">
+            <nav>
+                <ul class="pagination mb-0">
+                    <li class="page-item" th:classappend="${currentPage == 0} ? 'disabled'">
+                        <a class="page-link shadow-sm" th:href="@{/admin/incidents(provinceId=${selP}, cityId=${selC}, caseTypeId=${selCT}, year=${selY}, page=${currentPage - 1})}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                    <li class="page-item" th:each="pageNo : ${pageNumbers}" th:classappend="${pageNo == currentPage} ? 'active'">
+                        <a class="page-link shadow-sm" th:text="${pageNo + 1}" th:href="@{/admin/incidents(provinceId=${selP}, cityId=${selC}, caseTypeId=${selCT}, year=${selY}, page=${pageNo})}"></a>
+                    </li>
+                    <li class="page-item" th:classappend="${currentPage + 1 == totalPages} ? 'disabled'">
+                        <a class="page-link shadow-sm" th:href="@{/admin/incidents(provinceId=${selP}, cityId=${selC}, caseTypeId=${selCT}, year=${selY}, page=${currentPage + 1})}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="incidentModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <form th:action="@{/admin/incidents/save}" method="post" class="modal-content border-0">
+            <input type="hidden" name="id" id="mId">
+            <input type="hidden" name="selP" th:value="${selP}">
+            <input type="hidden" name="selC" th:value="${selC}">
+            <input type="hidden" name="selCT" th:value="${selCT}">
+            <input type="hidden" name="selY" th:value="${selY}">
+
+            <div class="modal-header bg-sky text-white">
+                <h5 class="modal-title fw-bold" id="modalTitle">Crime Record Entry</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Province</label>
+                        <select id="mProv" class="form-select" onchange="updateModalCities(this.value)" required>
+                            <option value="0">-- No Province --</option>
+                            <option th:each="p : ${provinces}" th:value="${p.province_id}" th:text="${p.province_en}"></option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">City</label>
+                        <select name="city.city_id" id="mCity" class="form-select" required></select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Case Type</label>
+                        <select name="caseType.case_type_id" id="mCaseType" class="form-select" required>
+                            <option th:each="ct : ${caseTypes}" th:value="${ct.case_type_id}" th:text="${ct.case_type_en}"></option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Date & Time</label>
+                        <input type="datetime-local" name="formattedDatetime" id="mDateTime" class="form-control" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Latitude (-90 to 90)</label>
+                        <input type="number" step="any" name="latitude" id="mLat"
+                               class="form-control" min="-90" max="90" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Longitude (-180 to 180)</label>
+                        <input type="number" step="any" name="longitude" id="mLon"
+                               class="form-control" min="-180" max="180" required>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Close</button>
+                <button type="submit" class="btn bg-sky px-4 fw-bold">Save Record</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form th:action="@{/admin/incidents/delete}" method="post" class="modal-content border-0 shadow">
+            <input type="hidden" name="id" id="delId">
+            <input type="hidden" name="p" th:value="${selP}">
+            <input type="hidden" name="c" th:value="${selC}">
+            <input type="hidden" name="ct" th:value="${selCT}">
+            <input type="hidden" name="y" th:value="${selY}">
+
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title fw-bold">Confirm Deletion</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body py-4">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-exclamation-triangle fa-4x text-danger twinkle-icon"></i>
+                    </div>
+                    <div class="ms-4">
+                        <p class="mb-1 text-muted">You are deleting:</p>
+                        <h4 class="text-dark fw-bold">A Crime Record</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Close</button>
+                <button type="submit" class="btn btn-danger px-4 fw-bold shadow-sm">Confirm Delete</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const incidentModal = new bootstrap.Modal(document.getElementById('incidentModal'));
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+
+    // Filter Logic
+    function updateCities(pId) {
+        fetch('/admin/incidents/cities-by-province?provinceId=' + pId).then(res => res.json()).then(data => {
+            const citySelect = document.getElementById('fCity');
+            citySelect.innerHTML = '';
+            data.forEach(c => { citySelect.innerHTML += `<option value="${c.city_id}">${c.city_en}</option>`; });
+            document.getElementById('filterForm').submit();
+        });
+    }
+
+    // Modal City Logic
+    function updateModalCities(pId, selectedCityId = null) {
+        return fetch('/admin/incidents/cities-by-province?provinceId=' + pId)
+            .then(res => res.json())
+            .then(data => {
+                const citySelect = document.getElementById('mCity');
+                citySelect.innerHTML = '';
+                data.forEach(c => {
+                    const sel = (selectedCityId == c.city_id) ? 'selected' : '';
+                    citySelect.innerHTML += `<option value="${c.city_id}" ${sel}>${c.city_en}</option>`;
+                });
+            });
+    }
+
+    // Prepare ADD
+    function prepareAdd() {
+        document.getElementById('modalTitle').innerText = "New Crime Record";
+        document.getElementById('mId').value = "";
+        document.getElementById('mProv').value = "0";
+        document.getElementById('mLat').value = "";
+        document.getElementById('mLon').value = "";
+        document.getElementById('mDateTime').value = "";
+        updateModalCities(0);
+        incidentModal.show();
+    }
+
+    // Prepare EDIT
+    function prepareEdit(id, provId, cityId, caseId, lat, lon, dt) {
+        document.getElementById('modalTitle').innerText = "Edit Crime Record";
+        document.getElementById('mId').value = id;
+        document.getElementById('mProv').value = provId;
+        document.getElementById('mCaseType').value = caseId;
+        document.getElementById('mLat').value = lat;
+        document.getElementById('mLon').value = lon;
+        document.getElementById('mDateTime').value = dt;
+
+        updateModalCities(provId, cityId).then(() => {
+            incidentModal.show();
+        });
+    }
+
+    function confirmDelete(id) {
+        document.getElementById('delId').value = id;
+        deleteModal.show();
+    }
+</script>
+</body>
+</html>
