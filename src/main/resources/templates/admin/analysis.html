@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Lumina | Dual-View Hotspot Analysis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <style>
+        body { background-color: #f8f9fa; }
+        .sidebar { height: 100vh; background-color: #87CEEB; color: white; position: fixed; width: 250px; z-index: 1000; }
+        .sidebar a { color: white; text-decoration: none; padding: 12px 25px; display: block; }
+        .main-content { margin-left: 250px; padding: 40px; }
+        .bg-sky { background-color: #87CEEB !important; color: white !important; }
+        /* Map containers must have height to be visible */
+        .map-container { height: 700px; width: 100%; border-radius: 12px; margin-top: 10px; border: 1px solid #ddd; background-color: #e9ecef;}
+        .metric-card { border-right: 1px solid #eee; }
+        .metric-card:last-child { border-right: none; }
+        .sticky-table { max-height: 400px; overflow-y: auto; }
+        .tooltip-custom { font-size: 13px; line-height: 1.4; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar shadow">
+    <div class="text-center mb-4 mt-3"><h4 class="fw-bold">LUMINA</h4><p class="small">Safety Analytics</p></div>
+    <a th:href="@{/admin/incidents}"><i class="fas fa-database me-2"></i> Crime Records</a>
+    <a th:href="@{/admin/analysis}" class="bg-white text-dark fw-bold shadow-sm"><i class="fas fa-microscope me-2"></i> Hotspot Analysis</a>
+</div>
+
+<div class="main-content">
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-sky text-white fw-bold"><i class="fas fa-sliders-h me-2"></i>DBSCAN Configuration</div>
+        <div class="card-body p-4">
+            <form th:action="@{/admin/analysis/run}" method="post" class="row g-3" id="analysisForm">
+                <div class="col-md-3"><label class="form-label fw-bold">Epsilon (m)</label>
+                    <input type="number" step="0.1" name="epsilon" class="form-control" th:value="${eps}" required></div>
+                <div class="col-md-3"><label class="form-label fw-bold">MinPts</label>
+                    <input type="number" name="minPts" class="form-control" th:value="${min}" required></div>
+                <div class="col-md-3"><label class="form-label fw-bold">Province</label>
+                    <select name="provinceId" class="form-select">
+                        <option value="0" th:selected="${selP == 0}">All Provinces</option>
+                        <option th:each="p : ${provinces}" th:value="${p.province_id}" th:text="${p.province_en}" th:selected="${p.province_id == selP}"></option>
+                    </select></div>
+                <div class="col-md-3"><label class="form-label fw-bold">Year</label>
+                    <select name="year" class="form-select">
+                        <option value="0" th:selected="${selY == 0}">All Years</option>
+                        <option th:each="y : ${years}" th:value="${y}" th:text="${y}" th:selected="${y == selY}"></option>
+                    </select></div>
+                <div class="col-12 text-end mt-3">
+                    <button type="submit" class="btn bg-sky px-5 fw-bold" id="analyzeBtn">Analyze</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div th:if="${results != null and results.get('error') == null}" class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-dark text-white fw-bold d-flex justify-content-between">
+            <span>Analysis Results</span><span class="badge bg-secondary" th:text="${results.get('totalPoints') + ' Points'}"></span>
+        </div>
+        <div class="card-body">
+            <div class="row text-center mb-3">
+                <div class="col-md-3 metric-card"><p class="text-muted mb-0">Clusters</p><h3 class="fw-bold" th:text="${results.get('totalClusters')}"></h3></div>
+                <div class="col-md-3 metric-card"><p class="text-muted mb-0">Noise %</p><h3 class="fw-bold text-danger" th:text="${#numbers.formatDecimal(results.get('noisePercentage'), 1, 2) + '%'}"></h3></div>
+                <div class="col-md-3 metric-card"><p class="text-muted mb-0">DBI</p><h3 class="fw-bold text-success" th:text="${#numbers.formatDecimal(results.get('dbi'), 1, 4)}"></h3></div>
+                <div class="col-md-3"><p class="text-muted mb-0">Runtime</p><h3 class="fw-bold text-warning" th:text="${results.get('executionTime')}"></h3></div>
+            </div>
+            <div class="d-flex justify-content-between border-top pt-3">
+                <a th:href="@{/admin/analysis}" class="btn btn-outline-danger px-4 fw-bold">Reject Results</a>
+                <button class="btn btn-success px-5 fw-bold" data-bs-toggle="modal" data-bs-target="#saveModal">Continue & Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div th:if="${results != null and results.get('error') == null}" class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-secondary text-white fw-bold">Global Density Overview (5% Per-Cluster Sampling)</div>
+        <div class="card-body">
+            <div id="globalMap" class="map-container"></div>
+        </div>
+    </div>
+
+    <div th:if="${results != null and results.get('error') == null}" class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-primary text-white fw-bold d-flex justify-content-between align-items-center">
+            <div><i class="fas fa-search-location me-2"></i><span>Cluster Detail Inspector</span></div>
+            <div class="d-flex align-items-center">
+                <span id="clusterStatsBadge" class="badge bg-light text-dark me-3 p-2">Select a Cluster</span>
+                <label class="me-2 mb-0 small text-nowrap text-white">View Cluster ID:</label>
+                <input type="number" id="clusterIdInput" class="form-control form-control-sm w-25" value="0" onchange="loadClusterDetail()">
+            </div>
+        </div>
+        <div class="card-body">
+            <div id="detailMap" class="map-container mb-4"></div>
+            <div class="sticky-table border rounded">
+                <table class="table table-hover table-sm mb-0">
+                    <thead class="table-light sticky-top">
+                    <tr><th>S/N</th><th>Lat</th><th>Lng</th><th>Point Type</th><th>Case Type</th><th>Location</th><th>DateTime</th></tr>
+                    </thead>
+                    <tbody id="detailTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <input type="hidden" id="rawPointsData" th:value="${pointsJson}">
+    <input type="hidden" id="errorMessage" th:value="${results != null ? results.get('error') : ''}">
+    <input type="hidden" id="successMessage" th:value="${saveSuccess}">
+</div>
+
+<div class="modal fade" id="errorModal" data-bs-backdrop="static" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title fw-bold"><i class="fas fa-exclamation-circle me-2"></i>Analysis Error</h5>
+            </div>
+            <div class="modal-body text-center p-4">
+                <p id="errorDescription" class="fs-5 text-dark"></p>
+                <a th:href="@{/admin/analysis}" class="btn btn-danger px-5 fw-bold mt-3">Ok</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="successModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title fw-bold"><i class="fas fa-check-circle me-2"></i>Success</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center p-4">
+                <p id="successDescription" class="fs-5 text-dark"></p>
+                <button type="button" class="btn btn-success px-5 fw-bold" data-bs-dismiss="modal">Ok</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="saveModal" tabindex="-1"><div class="modal-dialog"><form th:action="@{/admin/analysis/save}" method="post" class="modal-content">
+    <div class="modal-header fw-bold">Save Analysis Model</div>
+    <div class="modal-body">
+        <input type="hidden" name="epsilon" th:value="${eps}"><input type="hidden" name="minPts" th:value="${min}">
+        <input type="hidden" name="provinceId" th:value="${selP}"><input type="hidden" name="year" th:value="${selY}">
+        <div class="mb-3">
+            <label class="form-label fw-bold">Name your model</label>
+            <input type="text" name="modelName" class="form-control" placeholder="e.g. 2026 Nationwide Security Baseline" required>
+        </div>
+    </div>
+    <div class="modal-footer"><button type="submit" class="btn btn-primary w-100 fw-bold">Confirm & Save</button></div>
+</form></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    let globalMap, detailMap;
+    let globalLayer, detailLayer;
+    let allPoints = [];
+
+    // 1. Analyze Button Handling
+    document.getElementById('analysisForm').onsubmit = function() {
+        const btn = document.getElementById('analyzeBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing analysis...';
+    };
+
+    // 2. Beautiful 50-Color Generator (Golden Ratio)
+    function getClusterColor(id) {
+        if (id === -1) return "#95a5a6";
+        const hue = (id * 137.508) % 360;
+        return `hsl(${hue}, 75%, 50%)`;
+    }
+
+    // 3. Global Map Initialization
+    function initGlobalMap() {
+        const container = document.getElementById('globalMap');
+        if (!container) return;
+
+        globalMap = L.map('globalMap', { preferCanvas: true }).setView([35.0, 105.0], 4);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(globalMap);
+        globalLayer = L.layerGroup().addTo(globalMap);
+
+        const clusters = {};
+        allPoints.forEach(p => {
+            if (p.clusterId === -1) return;
+            if (!clusters[p.clusterId]) clusters[p.clusterId] = [];
+            clusters[p.clusterId].push(p);
+        });
+
+        Object.keys(clusters).forEach(cid => {
+            const pts = clusters[cid];
+            const sampleSize = Math.max(1, Math.ceil(pts.length * 0.05));
+            for (let i = 0; i < sampleSize; i++) {
+                const p = pts[i];
+                L.circleMarker([p.lat, p.lng], {
+                    radius: 3, fillColor: getClusterColor(p.clusterId), color: "#333", weight: 0.5, fillOpacity: 0.8
+                }).addTo(globalLayer);
+            }
+        });
+    }
+
+    // 4. Detail Map & Table Handling
+    function initDetailMap() {
+        const container = document.getElementById('detailMap');
+        if (!container) return;
+
+        detailMap = L.map('detailMap', { preferCanvas: true }).setView([35.0, 105.0], 4);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(detailMap);
+        detailLayer = L.layerGroup().addTo(detailMap);
+        loadClusterDetail();
+    }
+
+    function loadClusterDetail() {
+        const targetId = parseInt(document.getElementById('clusterIdInput').value);
+        const tableBody = document.getElementById('detailTableBody');
+        const statsBadge = document.getElementById('clusterStatsBadge');
+
+        if (!detailLayer) return;
+        detailLayer.clearLayers();
+        tableBody.innerHTML = "";
+
+        const filtered = allPoints.filter(p => p.clusterId === targetId);
+
+        // Update Count Text
+        if (filtered.length > 0) {
+            statsBadge.innerHTML = `Cluster ${targetId} has <strong>${filtered.length.toLocaleString()}</strong> points`;
+            statsBadge.className = "badge bg-warning text-dark me-3 p-2";
+        } else {
+            statsBadge.innerText = `Cluster ${targetId} not found`;
+            statsBadge.className = "badge bg-danger text-white me-3 p-2";
+        }
+
+        const bounds = [];
+        const fragment = document.createDocumentFragment();
+
+        filtered.forEach((p, index) => {
+            const marker = L.circleMarker([p.lat, p.lng], {
+                radius: 6, fillColor: "#ff0000", color: "#fff", weight: 1.5, fillOpacity: 0.8
+            });
+
+            const tooltipContent = `
+                <div class="tooltip-custom">
+                    <strong>Cluster ${p.clusterId} | S/N: ${index + 1}</strong><br/>
+                    <b>Type:</b> ${p.type}<br/>
+                    <b>Coord:</b> ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}<br/>
+                    <b>Location:</b> ${p.cityName}, ${p.provinceName}<br/>
+                    <b>Case:</b> ${p.caseType}
+                </div>`;
+
+            marker.bindTooltip(tooltipContent, { sticky: true });
+            marker.addTo(detailLayer);
+            bounds.push([p.lat, p.lng]);
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${index + 1}</td>
+                <td>${p.lat.toFixed(5)}</td>
+                <td>${p.lng.toFixed(5)}</td>
+                <td><span class="badge ${p.type === 'CORE' ? 'bg-primary' : 'bg-info'}">${p.type}</span></td>
+                <td>${p.caseType}</td>
+                <td>${p.cityName}, ${p.provinceName}</td>
+                <td>${p.datetime}</td>
+            `;
+            fragment.appendChild(tr);
+        });
+
+        tableBody.appendChild(fragment);
+        if (bounds.length > 0) detailMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+    }
+
+    window.onload = function() {
+        // 1. Check for error message first
+        const errorMsg = document.getElementById('errorMessage').value;
+
+        if (errorMsg && errorMsg.trim() !== "") {
+            // If there's an error, show the red pop-up
+            document.getElementById('errorDescription').innerText = errorMsg;
+            const errorModal = new bootstrap.Modal(document.getElementById('errorModal'));
+            errorModal.show();
+            return; // Stop further map initialization
+        }
+
+        const successMsg = document.getElementById('successMessage').value;
+        if (successMsg && successMsg.trim() !== "") {
+            document.getElementById('successDescription').innerText = successMsg;
+            new bootstrap.Modal(document.getElementById('successModal')).show();
+        }
+
+        // 2. If no error, proceed to load maps
+        const data = document.getElementById('rawPointsData').value;
+        if (data && data !== "[]") {
+            allPoints = JSON.parse(data);
+            initGlobalMap();
+            initDetailMap();
+        }
+    };
+</script>
+</body>
+</html>

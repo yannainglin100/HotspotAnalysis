@@ -32,58 +32,32 @@ public class ManualDBSCAN implements CommandLineRunner {
     // ==================== SPRING ENTRY POINT ====================
     @Override
     public void run(String... args) throws Exception {
-//        System.out.println("\n" + "=".repeat(50));
-//        System.out.println("STARTING DBSCAN ANALYSIS ON POSTGRES DATA");
-//        System.out.println("=".repeat(50));
-//
-//        // 1. Fetch data for 2018
 //        List<Point> points = loadPointsFromDb();
 //        System.out.println(points.size());
 //        if (points.isEmpty()) {
 //            System.out.println("No data found for the year 2018.");
 //            return;
 //        }
-//
-//        // 2. Automatic Parameter Estimation
 //        System.out.println("\nStep 1: Automatic parameter estimation...");
 //        double initialEpsilon = 1500.0; // Starting heuristic
 //        int minPts = calculateOptimalMinPts(points, initialEpsilon);
 //        double epsilon = calculateOptimalEpsilon(points, minPts);
-//
 //        System.out.printf("Selected Parameters: ε = %.2f meters, minPts = %d\n", epsilon, minPts);
 //
-//        // 3. Run Algorithm
 //        System.out.println("\nStep 2: Running KD-Tree Optimized DBSCAN...");
 //        long startTime = System.currentTimeMillis();
 //        runOptimizedDBSCAN(points, epsilon, minPts);
 //        long endTime = System.currentTimeMillis();
-//
-//        long coreCount = points.stream()
-//                .filter(p -> "CORE".equalsIgnoreCase(p.pointType))
-//                .count();
-//
-//        System.out.println("\nTotal Core Points: " + coreCount);
-//        double percentage = (double) coreCount * 100 / points.size();
-//        System.out.println("Core Percentage: " + String.format("%.2f", percentage) + "%");
-//
-//        long borderCount = points.stream()
-//                .filter(p -> "BORDER".equalsIgnoreCase(p.pointType))
-//                .count();
-//
-//        System.out.println("\nTotal Border Points: " + borderCount);
-//        percentage = (double) borderCount * 100 / points.size();
-//        System.out.println("Border Percentage: " + String.format("%.2f", percentage) + "%");
 //
 //        long noiseCount = points.stream()
 //                .filter(p -> "NOISE".equalsIgnoreCase(p.pointType))
 //                .count();
 //
 //        System.out.println("\nTotal Noise Points: " + noiseCount);
-//        percentage = (double) noiseCount * 100 / points.size();
+//        double percentage = (double) noiseCount * 100 / points.size();
 //        System.out.println("Noise Percentage: " + String.format("%.2f", percentage) + "%");
 //
 //        calculateAndPrintDBI(points);
-//
 //        System.out.printf("\nTotal Processing Time: %.2f seconds\n", (endTime - startTime) / 1000.0);
     }
 
@@ -236,11 +210,11 @@ public class ManualDBSCAN implements CommandLineRunner {
 
     // ==================== PARAMETER MATH ====================
     public static double calculateOptimalEpsilon(List<Point> points, int minPts) {
-        return 1800;
+        return 5000;
     }
 
     public static int calculateOptimalMinPts(List<Point> points, double epsilon) {
-        return 6;
+        return 100;
     }
 
     private static double haversineDistance(double lat1, double lon1, double lat2, double lon2) {
