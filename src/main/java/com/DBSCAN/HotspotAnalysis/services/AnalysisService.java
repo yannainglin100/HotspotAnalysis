@@ -188,8 +188,8 @@ public class AnalysisService {
         Collections.sort(allScores);
 
         // Persistent Model Record
-        String sqlModel = "INSERT INTO model (model_name, provinces, years, epsilon, minpts, total_clusters, noise_percentage, dbi) VALUES (?,?,?,?,?,?,?,?)";
-        jdbcTemplate.update(sqlModel, modelName, String.valueOf(pId), String.valueOf(year), eps, min, clusterCount, results.get("noisePercentage"), results.get("dbi"));
+        String sqlModel = "INSERT INTO model (model_name, provinces, years, epsilon, minpts, total_clusters, noise_percentage, dbi, points_processed) VALUES (?,?,?,?,?,?,?,?,?)";
+        jdbcTemplate.update(sqlModel, modelName, String.valueOf(pId), String.valueOf(year), eps, min, clusterCount, results.get("noisePercentage"), results.get("dbi"), points.size());
         int modelId = jdbcTemplate.queryForObject("SELECT lastval()", Integer.class);
 
         // Persistent City Risk Records

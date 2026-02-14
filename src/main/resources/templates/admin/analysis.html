@@ -2,15 +2,17 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <title>Lumina | Dual-View Hotspot Analysis</title>
+    <title>Lumina | Hotspot Analysis</title>
+    <link rel="icon" type="image/png" href="/images/lumina-logo.png">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
     <style>
         body { background-color: #f8f9fa; }
-        .sidebar { height: 100vh; background-color: #87CEEB; color: white; position: fixed; width: 250px; z-index: 1000; }
-        .sidebar a { color: white; text-decoration: none; padding: 12px 25px; display: block; }
+        .sidebar { height: 100vh; background-color: #87CEEB; color: white; position: fixed; width: 250px; padding-top: 20px; }
+        .sidebar a { color: white; text-decoration: none; padding: 10px 20px; display: block; transition: 0.3s; }
+        .sidebar a:hover { background-color: #00BFFF; }
         .main-content { margin-left: 250px; padding: 40px; }
         .bg-sky { background-color: #87CEEB !important; color: white !important; }
         /* Map containers must have height to be visible */
@@ -19,46 +21,105 @@
         .metric-card:last-child { border-right: none; }
         .sticky-table { max-height: 400px; overflow-y: auto; }
         .tooltip-custom { font-size: 13px; line-height: 1.4; }
+
+        /* Ensures table cells handle long text gracefully */
+        .table td {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            vertical-align: middle;
+        }
+
+        /* Allow Location to wrap if it's too long */
+        .table td:nth-child(6) {
+            white-space: normal;
+            word-break: break-word;
+        }
+
+        .table-light.sticky-top th {
+            background-color: #f8f9fa; /* Matches table-light */
+            border-bottom: 2px solid #dee2e6;
+            z-index: 2;
+        }
     </style>
 </head>
 <body>
 
 <div class="sidebar shadow">
-    <div class="text-center mb-4 mt-3"><h4 class="fw-bold">LUMINA</h4><p class="small">Safety Analytics</p></div>
-    <a th:href="@{/admin/incidents}"><i class="fas fa-database me-2"></i> Crime Records</a>
-    <a th:href="@{/admin/analysis}" class="bg-white text-dark fw-bold shadow-sm"><i class="fas fa-microscope me-2"></i> Hotspot Analysis</a>
+    <div class="d-flex align-items-center justify-content-center">
+        <img src="/images/lumina-logo.png" class="rounded-circle" style="width: 70px; height: 70px; object-fit: cover;">
+        <h4 class="ms-1 mb-0 text-white fw-bold">Lumina</h4>
+    </div>
+    <hr class="mx-3 text-white">
+    <div class="mt-3">
+        <a th:href="@{/admin/provinces}">Provinces</a>
+        <a th:href="@{/admin/cities}">Cities</a>
+        <a th:href="@{/admin/case-types}">Case Types</a>
+        <a th:href="@{/admin/incidents}">Crime Records</a>
+        <a th:href="@{/admin/analysis}" class="fw-bold bg-white text-dark shadow-sm">Hotspot Analysis</a>
+    </div>
 </div>
 
 <div class="main-content">
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-sky text-white fw-bold"><i class="fas fa-sliders-h me-2"></i>DBSCAN Configuration</div>
+    <div class="card border-0 shadow-sm mb-5">
+        <h5 class="card-header bg-sky text-white fw-bold py-3">
+            <i class="fas fa-sliders-h me-2"></i>DBSCAN Configuration
+        </h5>
         <div class="card-body p-4">
             <form th:action="@{/admin/analysis/run}" method="post" class="row g-3" id="analysisForm">
-                <div class="col-md-3"><label class="form-label fw-bold">Epsilon (m)</label>
-                    <input type="number" step="0.1" name="epsilon" class="form-control" th:value="${eps}" required></div>
-                <div class="col-md-3"><label class="form-label fw-bold">MinPts</label>
-                    <input type="number" name="minPts" class="form-control" th:value="${min}" required></div>
-                <div class="col-md-3"><label class="form-label fw-bold">Province</label>
-                    <select name="provinceId" class="form-select">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Epsilon (m)</label>
+                    <input type="number" step="0.1" name="epsilon" class="form-control"
+                           th:value="${eps}"
+                           th:readonly="${results != null}" required>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">MinPts</label>
+                    <input type="number" name="minPts" class="form-control"
+                           th:value="${min}"
+                           th:readonly="${results != null}" required>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Province</label>
+                    <select name="provinceId" class="form-select" th:disabled="${results != null}">
                         <option value="0" th:selected="${selP == 0}">All Provinces</option>
-                        <option th:each="p : ${provinces}" th:value="${p.province_id}" th:text="${p.province_en}" th:selected="${p.province_id == selP}"></option>
-                    </select></div>
-                <div class="col-md-3"><label class="form-label fw-bold">Year</label>
-                    <select name="year" class="form-select">
+                        <option th:each="p : ${provinces}"
+                                th:value="${p.province_id}"
+                                th:text="${p.province_en}"
+                                th:selected="${p.province_id == selP}"></option>
+                    </select>
+                    <input type="hidden" name="provinceId" th:if="${results != null}" th:value="${selP}">
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Year</label>
+                    <select name="year" class="form-select" th:disabled="${results != null}">
                         <option value="0" th:selected="${selY == 0}">All Years</option>
-                        <option th:each="y : ${years}" th:value="${y}" th:text="${y}" th:selected="${y == selY}"></option>
-                    </select></div>
+                        <option th:each="y : ${years}"
+                                th:value="${y}"
+                                th:text="${y}"
+                                th:selected="${y == selY}"></option>
+                    </select>
+                    <input type="hidden" name="year" th:if="${results != null}" th:value="${selY}">
+                </div>
+
                 <div class="col-12 text-end mt-3">
-                    <button type="submit" class="btn bg-sky px-5 fw-bold" id="analyzeBtn">Analyze</button>
+                    <button type="submit" class="btn bg-sky px-5 fw-bold" id="analyzeBtn"
+                            th:disabled="${results != null}"
+                            th:classappend="${results != null} ? 'opacity-50 cursor-not-allowed' : ''">
+                        Analyze
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 
-    <div th:if="${results != null and results.get('error') == null}" class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-dark text-white fw-bold d-flex justify-content-between">
-            <span>Analysis Results</span><span class="badge bg-secondary" th:text="${results.get('totalPoints') + ' Points'}"></span>
-        </div>
+    <div th:if="${results != null and results.get('error') == null}" class="card border-0 shadow-sm mb-5">
+        <h5 class="card-header bg-sky text-white fw-bold d-flex justify-content-between py-3">
+            <span>Analysis Results</span><span class="badge" th:text="${results.get('totalPoints') + ' Point(s) Processed'}"></span>
+        </h5>
         <div class="card-body">
             <div class="row text-center mb-3">
                 <div class="col-md-3 metric-card"><p class="text-muted mb-0">Clusters</p><h3 class="fw-bold" th:text="${results.get('totalClusters')}"></h3></div>
@@ -66,35 +127,52 @@
                 <div class="col-md-3 metric-card"><p class="text-muted mb-0">DBI</p><h3 class="fw-bold text-success" th:text="${#numbers.formatDecimal(results.get('dbi'), 1, 4)}"></h3></div>
                 <div class="col-md-3"><p class="text-muted mb-0">Runtime</p><h3 class="fw-bold text-warning" th:text="${results.get('executionTime')}"></h3></div>
             </div>
-            <div class="d-flex justify-content-between border-top pt-3">
-                <a th:href="@{/admin/analysis}" class="btn btn-outline-danger px-4 fw-bold">Reject Results</a>
-                <button class="btn btn-success px-5 fw-bold" data-bs-toggle="modal" data-bs-target="#saveModal">Continue & Save</button>
+            <div class="d-flex justify-content-end border-top pt-3">
+                <a th:href="@{/admin/analysis}" class="btn btn-danger px-4 fw-bold me-3">Reject Result</a>
+                <button class="btn bg-sky px-5 fw-bold" data-bs-toggle="modal" data-bs-target="#saveModal">Continue & Save</button>
             </div>
         </div>
     </div>
 
-    <div th:if="${results != null and results.get('error') == null}" class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-secondary text-white fw-bold">Global Density Overview (5% Per-Cluster Sampling)</div>
+    <div th:if="${results != null and results.get('error') == null}" class="card border-0 shadow-sm mb-5">
+        <h5 class="card-header bg-sky text-white fw-bold py-3">Global Density Overview (5% Per-Cluster Sampling)</h5>
         <div class="card-body">
             <div id="globalMap" class="map-container"></div>
         </div>
     </div>
 
-    <div th:if="${results != null and results.get('error') == null}" class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-primary text-white fw-bold d-flex justify-content-between align-items-center">
-            <div><i class="fas fa-search-location me-2"></i><span>Cluster Detail Inspector</span></div>
+    <div th:if="${results != null and results.get('error') == null}" class="card border-0 shadow-sm mb-5">
+        <div class="card-header bg-sky text-white fw-bold d-flex justify-content-between align-items-center py-3">
+            <h5 class=" fw-bold"><i class="fas fa-search-location me-2"></i><span>Cluster Detail Inspector</span></h5>
             <div class="d-flex align-items-center">
                 <span id="clusterStatsBadge" class="badge bg-light text-dark me-3 p-2">Select a Cluster</span>
                 <label class="me-2 mb-0 small text-nowrap text-white">View Cluster ID:</label>
-                <input type="number" id="clusterIdInput" class="form-control form-control-sm w-25" value="0" onchange="loadClusterDetail()">
+                <input type="number" min="0" id="clusterIdInput" class="form-control form-control-sm w-25" value="0" onchange="loadClusterDetail()">
             </div>
         </div>
         <div class="card-body">
             <div id="detailMap" class="map-container mb-4"></div>
             <div class="sticky-table border rounded">
-                <table class="table table-hover table-sm mb-0">
+                <table class="table table-hover table-sm mb-3" style="table-layout: fixed; width: 100%;">
+                    <colgroup>
+                        <col style="width: 70px;">  <col style="width: 100px;">
+                        <col style="width: 100px;">
+                        <col style="width: 100px;">
+                        <col style="width: 150px;">
+                        <col style="width: auto;">
+                        <col style="width: 180px;">
+                    </colgroup>
+
                     <thead class="table-light sticky-top">
-                    <tr><th>S/N</th><th>Lat</th><th>Lng</th><th>Point Type</th><th>Case Type</th><th>Location</th><th>DateTime</th></tr>
+                    <tr>
+                        <th class="py-3 ps-3">No.</th>
+                        <th class="py-3">Latitude</th>
+                        <th class="py-3">Longitude</th>
+                        <th class="py-3">Point Type</th>
+                        <th class="py-3">Case Type</th>
+                        <th class="py-3">Location</th>
+                        <th class="py-3">DateTime</th>
+                    </tr>
                     </thead>
                     <tbody id="detailTableBody"></tbody>
                 </table>
@@ -126,7 +204,6 @@
         <div class="modal-content border-0 shadow">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title fw-bold"><i class="fas fa-check-circle me-2"></i>Success</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body text-center p-4">
                 <p id="successDescription" class="fs-5 text-dark"></p>
@@ -136,18 +213,41 @@
     </div>
 </div>
 
-<div class="modal fade" id="saveModal" tabindex="-1"><div class="modal-dialog"><form th:action="@{/admin/analysis/save}" method="post" class="modal-content">
-    <div class="modal-header fw-bold">Save Analysis Model</div>
-    <div class="modal-body">
-        <input type="hidden" name="epsilon" th:value="${eps}"><input type="hidden" name="minPts" th:value="${min}">
-        <input type="hidden" name="provinceId" th:value="${selP}"><input type="hidden" name="year" th:value="${selY}">
-        <div class="mb-3">
-            <label class="form-label fw-bold">Name your model</label>
-            <input type="text" name="modelName" class="form-control" placeholder="e.g. 2026 Nationwide Security Baseline" required>
-        </div>
+<div class="modal fade" id="saveModal" data-bs-backdrop="static" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form th:action="@{/admin/analysis/save}" method="post" class="modal-content border-0 shadow">
+
+            <div class="modal-header bg-sky text-white">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-cloud-upload-alt me-2"></i>Save Analysis Model
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body p-2">
+                <input type="hidden" name="epsilon" th:value="${eps}">
+                <input type="hidden" name="minPts" th:value="${min}">
+                <input type="hidden" name="provinceId" th:value="${selP}">
+                <input type="hidden" name="year" th:value="${selY}">
+
+                <div class="mb-2 p-2">
+                    <label class="form-label fw-bold text-dark">Model Name</label>
+                    <input type="text" name="modelName" class="form-control form-control-md"
+                           placeholder="Enter a name for this model..." required>
+                </div>
+            </div>
+
+            <div class="modal-footer border-0 pb-4 d-flex justify-content-center gap-1">
+                <button type="button" class="btn btn-secondary px-4 fw-bold" data-bs-dismiss="modal">
+                    Close
+                </button>
+                <button type="submit" class="btn bg-sky text-white px-4 fw-bold" id="confirmSaveBtn">
+                    <i class="fas fa-check me-2"></i>Confirm & Save
+                </button>
+            </div>
+        </form>
     </div>
-    <div class="modal-footer"><button type="submit" class="btn btn-primary w-100 fw-bold">Confirm & Save</button></div>
-</form></div></div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -224,10 +324,10 @@
 
         // Update Count Text
         if (filtered.length > 0) {
-            statsBadge.innerHTML = `Cluster ${targetId} has <strong>${filtered.length.toLocaleString()}</strong> points`;
+            statsBadge.innerHTML = `Cluster ${targetId} has <strong>${filtered.length.toLocaleString()}</strong> points.`;
             statsBadge.className = "badge bg-warning text-dark me-3 p-2";
         } else {
-            statsBadge.innerText = `Cluster ${targetId} not found`;
+            statsBadge.innerText = `Cluster ${targetId} not found.`;
             statsBadge.className = "badge bg-danger text-white me-3 p-2";
         }
 
@@ -241,11 +341,12 @@
 
             const tooltipContent = `
                 <div class="tooltip-custom">
-                    <strong>Cluster ${p.clusterId} | S/N: ${index + 1}</strong><br/>
-                    <b>Type:</b> ${p.type}<br/>
-                    <b>Coord:</b> ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}<br/>
-                    <b>Location:</b> ${p.cityName}, ${p.provinceName}<br/>
-                    <b>Case:</b> ${p.caseType}
+                    <b>No.</b> ${index + 1}<br/>
+                    <b>Point Type:</b> ${p.type}<br/>
+                    <b>Case Type:</b> ${p.caseType}<br/>
+                    <b>Coordinate:</b> ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}<br/>
+                    <b>Location:</b> ${p.cityName}, ${p.provinceName}, China<br/>
+                    <b>Datetime:</b> ${p.datetime}
                 </div>`;
 
             marker.bindTooltip(tooltipContent, { sticky: true });
@@ -254,12 +355,12 @@
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${index + 1}</td>
+                <td class="ps-3">${index + 1}</td>
                 <td>${p.lat.toFixed(5)}</td>
                 <td>${p.lng.toFixed(5)}</td>
                 <td><span class="badge ${p.type === 'CORE' ? 'bg-primary' : 'bg-info'}">${p.type}</span></td>
                 <td>${p.caseType}</td>
-                <td>${p.cityName}, ${p.provinceName}</td>
+                <td>${p.cityName}, ${p.provinceName}, China</td>
                 <td>${p.datetime}</td>
             `;
             fragment.appendChild(tr);
@@ -294,6 +395,12 @@
             initGlobalMap();
             initDetailMap();
         }
+    };
+
+    document.querySelector('#saveModal form').onsubmit = function() {
+        const btn = document.getElementById('confirmSaveBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
     };
 </script>
 </body>
