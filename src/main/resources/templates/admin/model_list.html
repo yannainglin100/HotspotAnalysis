@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <title>Lumina | Model Management</title>
+  <link rel="icon" type="image/png" href="/images/lumina-logo.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+  <style>
+    body { background-color: #f8f9fa; }
+    .sidebar { height: 100vh; background-color: #87CEEB; color: white; position: fixed; width: 250px; padding-top: 20px; }
+    .sidebar a { color: white; text-decoration: none; padding: 10px 20px; display: block; transition: 0.3s; }
+    .sidebar a:hover { background-color: #00BFFF; }
+    .main-content { margin-left: 250px; padding: 50px; }
+    .bg-sky { background-color: #87CEEB !important; color: white !important; }
+
+    .fa-exclamation-triangle { animation: blinker 1.5s linear infinite; }
+    @keyframes blinker { 50% { opacity: 0.5; } }
+  </style>
+</head>
+
+<body>
+
+<div class="sidebar shadow">
+  <div class="d-flex align-items-center justify-content-center">
+    <img src="/images/lumina-logo.png" class="rounded-circle" style="width: 70px; height: 70px; object-fit: cover;">
+    <h4 class="ms-1 mb-0 text-white fw-bold">Lumina</h4>
+  </div>
+  <hr class="mx-3 text-white">
+  <div class="mt-3">
+    <a th:href="@{/admin/provinces}">Provinces</a>
+    <a th:href="@{/admin/cities}">Cities</a>
+    <a th:href="@{/admin/case-types}">Case Types</a>
+    <a th:href="@{/admin/incidents}">Crime Records</a>
+    <a th:href="@{/admin/analysis}">Hotspot Analysis</a>
+    <a th:href="@{/admin/models}" class="fw-bold bg-white text-dark shadow-sm">Models</a>
+  </div>
+</div>
+
+<div class="main-content">
+  <div class="card shadow-sm border-0">
+    <div class="card-header d-flex justify-content-between align-items-center bg-sky p-3">
+      <div class="d-flex align-items-center"><h5 class="fw-bold mb-0 me-3">Model Management</h5></div>
+      <div class="d-flex gap-2">
+        <select id="pFilter" class="form-select w-auto" onchange="filter()">
+          <option value="0">All Provinces</option>
+          <option th:each="p : ${provinces}" th:value="${p.province_id}" th:text="${p.province_en}" th:selected="${selP == p.province_id.toString()}"></option>
+        </select>
+        <select id="yFilter" class="form-select w-auto" onchange="filter()">
+          <option value="0">All Years</option>
+          <option th:each="y : ${years}" th:value="${y}" th:text="${y}" th:selected="${selY == y}"></option>
+        </select>
+      </div>
+    </div>
+
+    <table class="table align-middle">
+      <thead class="table-light">
+      <tr>
+        <th class="ps-3 py-2">Model Name</th><th class="py-2">Epsilon(m)</th><th class="py-2">MinPts</th><th class="py-2">DBI</th><th class="py-2">Trained Date</th>
+        <th th:if="${selP == '0' and selY == '0'}" class="py-2">Set for Travelers</th>
+        <th class="text-center py-2">Actions</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr th:if="${#lists.isEmpty(models)}">
+        <td colspan="7" class="text-center py-5">
+          <i class="fas fa-search fa-4x text-muted mb-3"></i>
+          <h4 class="text-muted">No Models Found</h4>
+          <p class="text-secondary">Try adjusting your province or year filters to find trained models.</p>
+        </td>
+      </tr>
+
+      <tr th:each="m : ${models}" th:if="${not #lists.isEmpty(models)}">
+        <td th:text="${m.model_name}" class="ps-3"></td>
+        <td th:text="${m.epsilon}"></td>
+        <td th:text="${m.minpts}"></td>
+        <td th:text="${m.dbi}"></td>
+        <td th:text="${m.trained_date_time}"></td>
+
+        <td th:if="${selP == '0' and selY == '0'}">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox"
+                   th:checked="${m.select_this}"
+                   th:onchange="'toggle(' + ${m.model_id} + ')'">
+          </div>
+        </td>
+<!--        <td th:unless="${selP == '0' and selY == '0'}">-->
+<!--          <span class="text-muted small">N/A</span>-->
+<!--        </td>-->
+
+        <td class="text-center">
+          <a th:href="@{'/admin/models/detail/' + ${m.model_id}}" class="text-primary me-2">
+            <i class="fa fa-eye fa-lg"></i>
+          </a>
+          <button class="btn btn-link text-warning p-0 me-2"
+                  th:data-id="${m.model_id}"
+                  th:data-name="${m.model_name}"
+                  onclick="openEditModal(this)">
+            <i class="fa fa-pencil-alt fa-lg"></i>
+          </button>
+          <button class="btn btn-link text-danger p-0"
+                  th:data-id="${m.model_id}"
+                  th:data-name="${m.model_name}"
+                  onclick="confirmDel(this)">
+            <i class="fa fa-trash fa-lg"></i>
+          </button>
+        </td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal fade" id="delModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">Confirm Deletion</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body py-4">
+        <div class="d-flex align-items-center">
+          <div class="flex-shrink-0"><i class="fas fa-exclamation-triangle fa-3x text-danger"></i></div>
+          <div class="flex-grow-1 ms-3">
+            <p class="mb-1">You are deleting model:</p>
+            <h5 class="text-dark fw-bold" id="delModelNameDisplay"></h5>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer bg-light">
+        <form th:action="@{/admin/models/delete}" method="post">
+          <input type="hidden" name="modelId" id="delIdInput">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="submit" class="btn btn-danger">Confirm Delete</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form th:action="@{/admin/models/edit-name}" method="post" class="modal-content border-0 shadow">
+      <div class="modal-header bg-sky text-dark">
+        <h5 class="modal-title fw-bold">Rename Model</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body py-2">
+        <div class="mt-2">
+          <input type="hidden" name="modelId" id="editId">
+          <label for="editName" class="form-label small fw-bold">New Model Name</label>
+          <input type="text" name="modelName" id="editName" class="form-control mb-3" required
+                 placeholder="Enter new name...">
+        </div>
+      </div>
+
+      <div class="modal-footer bg-light">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="submit" class="btn bg-sky px-4">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  function filter() { location.href = `/admin/models?provinceId=${document.getElementById('pFilter').value}&year=${document.getElementById('yFilter').value}`; }
+  function toggle(id) { fetch(`/admin/models/toggle?modelId=${id}`, {method:'POST'}).then(() => location.reload()); }
+
+  function confirmDel(btn) {
+    // Get values from the data attributes of the clicked button
+    const id = btn.getAttribute('data-id');
+    const name = btn.getAttribute('data-name');
+
+    // Set values in the modal
+    document.getElementById('delIdInput').value = id;
+    document.getElementById('delModelNameDisplay').innerText = name;
+
+    // Show the modal
+    new bootstrap.Modal(document.getElementById('delModal')).show();
+  }
+</script>
+
+<script>
+  function openEditModal(btn) {
+    // Extract values from data attributes
+    const id = btn.getAttribute('data-id');
+    const name = btn.getAttribute('data-name');
+
+    // Set values in the modal
+    document.getElementById('editId').value = id;
+    document.getElementById('editName').value = name;
+
+    // Optional: Show the current name in the body for better UX
+    const displayLabel = document.getElementById('currentModelNameDisplay');
+    if (displayLabel) displayLabel.innerText = name;
+
+    // Open the modal
+    new bootstrap.Modal(document.getElementById('editModal')).show();
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <title>Model Detail | Risk Visualization</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    .bg-sky { background-color: #87CEEB !important; color: white; }
+    #riskMap { height: 600px; border-radius: 15px; border: 1px solid #ddd; }
+    .table-scroll { max-height: 550px; overflow-y: auto; }
+    .cursor-pointer { cursor: pointer; }
+  </style>
+</head>
+<body class="bg-light">
+<div class="container-fluid p-4">
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body bg-sky rounded-3  d-flex justify-content-between align-items-center">
+      <h4 class="fw-bold mb-3" th:text="${m.model_name}"></h4>
+      <div class="row row-cols-2 row-cols-md-4 g-2 small">
+        <div class="col"><b>Epsilon:</b> [[${m.epsilon}]]</div>
+        <div class="col"><b>MinPts:</b> [[${m.minpts}]]</div>
+        <div class="col"><b>Noise%:</b> [[${m.noise_percentage}]]%</div>
+        <div class="col"><b>Total Clusters:</b> [[${m.total_clusters}]]</div>
+        <div class="col"><b>Points Processed:</b> [[${m.points_processed}]]</div>
+        <div class="col"><b>DBI:</b> [[${m.dbi}]]</div>
+        <div class="col"><b>Trained Date:</b> [[${m.trained_date_time}]]</div>
+        <div class="col"><b>Provinces:</b> [[${m.provinces == '0' ? 'All Provinces' : provName}]]</div>
+        <div class="col"><b>Years:</b> [[${m.years == '0' ? 'All Years' : m.years}]]</div>
+      </div>
+    </div>
+    <a href="/admin/models" class="btn btn-light fw-bold px-4">Back</a>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-5">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white py-3 d-flex justify-content-between">
+          <span class="fw-bold">Risk Rankings</span>
+          <select id="pFilter" class="form-select form-select-sm w-50"
+                  onchange="updateProvince()"
+                  th:disabled="${m.provinces != '0'}">
+
+            <option value="0" th:selected="${selP == '0'}">All Provinces</option>
+
+            <option th:each="p : ${provinces}"
+                    th:value="${p.province_id}"
+                    th:text="${p.province_en}"
+                    th:selected="${#strings.toString(p.province_id) == selP}">
+            </option>
+          </select>
+        </div>
+        <div class="table-scroll">
+          <table class="table table-hover align-middle">
+            <thead class="table-light sticky-top">
+            <tr>
+              <th>No.</th>
+              <th>Province</th>
+              <th>City</th>
+              <th class="cursor-pointer" onclick="sortTable()">Score <i class="fa fa-sort"></i></th>
+              <th>Risk</th>
+            </tr>
+            </thead>
+            <tbody id="riskBody">
+            <tr th:each="r, rStat : ${risks}" th:data-idx="${rStat.index}">
+              <td class="row-no" th:text="${rStat.count}"></td>
+              <td th:text="${r.provinceName}"></td>
+              <td th:text="${r.cityName}"></td>
+              <td th:text="${r.score}" th:data-val="${r.scoreValue}"></td>
+              <td>
+                <span th:text="${r.riskLevel}" th:data-level="${r.riskLevel}"
+                      th:class="'badge ' + ${r.riskLevel == 'High Risk' ? 'bg-danger' : (r.riskLevel == 'Medium Risk' ? 'bg-warning' : (r.riskLevel == 'Low Risk' ? 'bg-info' : 'bg-success'))}">
+                </span>
+              </td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-7">
+      <div id="riskMap" class="shadow-sm"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script th:inline="javascript">
+  const risksData = /*[[${risks}]]*/ [];
+  const markers = {}; // Store markers globally to update them on sort
+  const map = L.map('riskMap').setView([35.8617, 104.1954], 4);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+  function getRiskColor(lvl) {
+        if (lvl === 'High Risk') return '#dc3545';
+        if (lvl === 'Medium Risk') return '#f3ff07';
+        if (lvl === 'Low Risk') return '#07d6ff';
+        return '#198754';
+    }
+
+  // Function to format the tooltip string as requested
+    function getTooltipContent(no, r) {
+        return `<b>No. ${no} Location;</b> ${r.cityName}, ${r.provinceName}<br><b>Score:</b> ${r.score}<br><b>Risk level:</b> ${r.riskLevel}`;
+    }
+
+    // Initialize markers and store them by their city name
+    risksData.forEach((r, i) => {
+        if(r.lat && r.lng) {
+            const marker = L.circleMarker([r.lat, r.lng], {
+                radius: 8, fillColor: getRiskColor(r.riskLevel), color: "#fff", weight: 1, fillOpacity: 0.8
+            }).addTo(map);
+
+            marker.bindTooltip(getTooltipContent(i + 1, r));
+            markers[r.cityName] = marker; // Use cityName as key
+        }
+    });
+
+  function updateProvince() {
+      const pId = document.getElementById('pFilter').value;
+      location.href = `/admin/models/detail/[[${m.model_id}]]?provinceId=${pId}`;
+  }
+
+  let sortAsc = true;
+    function sortTable() {
+        const levelOrder = { "High Risk": 4, "Medium Risk": 3, "Low Risk": 2, "Safe": 1 };
+        const tbody = document.getElementById('riskBody');
+        const rows = Array.from(tbody.rows);
+
+        rows.sort((a, b) => {
+            // Updated indices: No[0], Prov[1], City[2], Score[3], Risk[4]
+            const lvlA = levelOrder[a.cells[4].querySelector('span').dataset.level] || 0;
+            const lvlB = levelOrder[b.cells[4].querySelector('span').dataset.level] || 0;
+            const scoreA = parseFloat(a.cells[3].dataset.val);
+            const scoreB = parseFloat(b.cells[3].dataset.val);
+
+            // Group by Level, then sort by Score
+            if (lvlA !== lvlB) return sortAsc ? lvlA - lvlB : lvlB - lvlA;
+            return sortAsc ? scoreA - scoreB : scoreB - scoreA;
+        });
+
+        sortAsc = !sortAsc;
+
+        rows.forEach((r, index) => {
+            const newNo = index + 1;
+            const originalData = risksData[r.dataset.idx];
+
+            // 1. Update Table No.
+            r.cells[0].innerText = newNo;
+            tbody.appendChild(r);
+
+            // 2. Update Map Marker Tooltip Number
+            const marker = markers[originalData.cityName];
+            if (marker) {
+                marker.setTooltipContent(getTooltipContent(newNo, originalData));
+            }
+        });
+    }
+</script>
+
+<script th:inline="javascript">
+  function updateProvince() {
+      const pId = document.getElementById('pFilter').value;
+      const mId = [[${m.model_id}]];
+      location.href = `/admin/models/detail/${mId}?provinceId=${pId}`;
+  }
+</script>
+</body>
+</html>
