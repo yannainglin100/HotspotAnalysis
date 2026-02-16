@@ -2,85 +2,217 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
   <meta charset="UTF-8">
-  <title>Model Detail | Risk Visualization</title>
+  <title>Lumina | Model Detail</title>
+  <link rel="icon" type="image/png" href="/images/lumina-logo.png">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    .bg-sky { background-color: #87CEEB !important; color: white; }
+    body { background-color: #f8f9fa; }
+    .sidebar { height: 100vh; background-color: #87CEEB; color: white; position: fixed; width: 250px; padding-top: 20px; }
+    .sidebar a { color: white; text-decoration: none; padding: 10px 20px; display: block; transition: 0.3s; }
+    .sidebar a:hover { background-color: #00BFFF; }
+    .main-content { margin-left: 250px; padding: 50px; }
+    .bg-sky { background-color: #87CEEB !important; color: white !important; }
     #riskMap { height: 600px; border-radius: 15px; border: 1px solid #ddd; }
     .table-scroll { max-height: 550px; overflow-y: auto; }
     .cursor-pointer { cursor: pointer; }
+
+    .sidebar {
+    background-color: #87CEEB; /* bg-sky */
+    width: 260px;
+    position: fixed;
+    height: 100%;
+    z-index: 1000;
+}
+
+.nav-link-custom {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    color: white;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.3s;
+}
+
+.nav-link-custom i {
+    width: 25px; /* Fixed width for icons ensures text aligns vertically */
+    margin-right: 15px;
+    font-size: 1.1rem;
+}
+
+.nav-link-custom:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+/* Style for active page (can be applied via Thymeleaf classappend) */
+.nav-link-custom.active {
+    background: white;
+    color: #333;
+    font-weight: bold;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
   </style>
 </head>
-<body class="bg-light">
-<div class="container-fluid p-4">
-  <div class="card border-0 shadow-sm mb-4">
-    <div class="card-body bg-sky rounded-3  d-flex justify-content-between align-items-center">
-      <h4 class="fw-bold mb-3" th:text="${m.model_name}"></h4>
-      <div class="row row-cols-2 row-cols-md-4 g-2 small">
-        <div class="col"><b>Epsilon:</b> [[${m.epsilon}]]</div>
-        <div class="col"><b>MinPts:</b> [[${m.minpts}]]</div>
-        <div class="col"><b>Noise%:</b> [[${m.noise_percentage}]]%</div>
-        <div class="col"><b>Total Clusters:</b> [[${m.total_clusters}]]</div>
-        <div class="col"><b>Points Processed:</b> [[${m.points_processed}]]</div>
-        <div class="col"><b>DBI:</b> [[${m.dbi}]]</div>
-        <div class="col"><b>Trained Date:</b> [[${m.trained_date_time}]]</div>
-        <div class="col"><b>Provinces:</b> [[${m.provinces == '0' ? 'All Provinces' : provName}]]</div>
-        <div class="col"><b>Years:</b> [[${m.years == '0' ? 'All Years' : m.years}]]</div>
-      </div>
-    </div>
-    <a href="/admin/models" class="btn btn-light fw-bold px-4">Back</a>
+<body>
+
+<div class="sidebar shadow d-flex flex-column" style="min-height: 100vh;">
+  <div class="d-flex align-items-center justify-content-center pt-4">
+    <img src="/images/lumina-logo.png" class="rounded-circle" style="width: 60px; height: 60px; object-fit: cover; border: 2px solid white;">
+    <h4 class="ms-2 mb-0 text-white fw-bold">Lumina</h4>
   </div>
 
-  <div class="row g-4">
-    <div class="col-lg-5">
-      <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white py-3 d-flex justify-content-between">
-          <span class="fw-bold">Risk Rankings</span>
-          <select id="pFilter" class="form-select form-select-sm w-50"
-                  onchange="updateProvince()"
-                  th:disabled="${m.provinces != '0'}">
+  <hr class="mx-3 text-white">
 
-            <option value="0" th:selected="${selP == '0'}">All Provinces</option>
+  <div class="mt-2 flex-grow-1">
+    <a th:href="@{/admin/provinces}" class="nav-link-custom">
+      <i class="fas fa-map-marked-alt"></i> Provinces
+    </a>
+    <a th:href="@{/admin/cities}" class="nav-link-custom">
+      <i class="fas fa-city"></i> Cities
+    </a>
+    <a th:href="@{/admin/case-types}" class="nav-link-custom">
+      <i class="fas fa-layer-group"></i> Case Types
+    </a>
+    <a th:href="@{/admin/incidents}" class="nav-link-custom">
+      <i class="fas fa-file-invoice"></i> Crime Records
+    </a>
+    <a th:href="@{/admin/analysis}" class="nav-link-custom">
+      <i class="fas fa-chart-line"></i> Hotspot Analysis
+    </a>
+    <a th:href="@{/admin/models}" class="nav-link-custom fw-bold bg-white text-dark shadow-sm">
+      <i class="fas fa-microchip"></i> Models
+    </a>
+  </div>
 
-            <option th:each="p : ${provinces}"
-                    th:value="${p.province_id}"
-                    th:text="${p.province_en}"
-                    th:selected="${#strings.toString(p.province_id) == selP}">
-            </option>
-          </select>
+  <div class="mt-auto mb-4 px-3">
+    <hr class="text-white opacity-50">
+    <a th:href="@{/logout}" class="btn btn-danger w-100 d-flex align-items-center justify-content-center">
+      <i class="fas fa-sign-out-alt me-2"></i> Logout
+    </a>
+  </div>
+</div>
+
+<div class="main-content">
+  <div class="card border-0 shadow-sm mb-5">
+    <div class="card-header bg-sky border-0 py-3">
+      <h4 class="fw-bold mb-0 text-center text-white" th:text="${m.model_name}"></h4>
+    </div>
+
+    <div class="card-body bg-white rounded-bottom px-4 py-4">
+      <div class="mx-auto" style="max-width: 600px;">
+        <div class="d-flex mb-2">
+          <span class="fw-bold text-secondary" style="min-width: 150px; font-size: 1rem;">Epsilon(m)</span>
+          <span class="me-3">:</span>
+          <span class="text-dark fw-semibold" th:text="${m.epsilon}"></span>
         </div>
-        <div class="table-scroll">
-          <table class="table table-hover align-middle">
-            <thead class="table-light sticky-top">
-            <tr>
-              <th>No.</th>
-              <th>Province</th>
-              <th>City</th>
-              <th class="cursor-pointer" onclick="sortTable()">Score <i class="fa fa-sort"></i></th>
-              <th>Risk</th>
-            </tr>
-            </thead>
-            <tbody id="riskBody">
-            <tr th:each="r, rStat : ${risks}" th:data-idx="${rStat.index}">
-              <td class="row-no" th:text="${rStat.count}"></td>
-              <td th:text="${r.provinceName}"></td>
-              <td th:text="${r.cityName}"></td>
-              <td th:text="${r.score}" th:data-val="${r.scoreValue}"></td>
-              <td>
-                <span th:text="${r.riskLevel}" th:data-level="${r.riskLevel}"
-                      th:class="'badge ' + ${r.riskLevel == 'High Risk' ? 'bg-danger' : (r.riskLevel == 'Medium Risk' ? 'bg-warning' : (r.riskLevel == 'Low Risk' ? 'bg-info' : 'bg-success'))}">
-                </span>
-              </td>
-            </tr>
-            </tbody>
-          </table>
+        <div class="d-flex mb-2">
+          <span class="fw-bold text-secondary" style="min-width: 150px; font-size: 1rem;">MinPts</span>
+          <span class="me-3">:</span>
+          <span class="text-dark fw-semibold" th:text="${m.minpts}"></span>
+        </div>
+        <div class="d-flex mb-2">
+          <span class="fw-bold text-secondary" style="min-width: 150px; font-size: 1rem;">Provinces</span>
+          <span class="me-3">:</span>
+          <span class="text-dark fw-semibold">[[${m.provinces == '0' ? 'All Provinces' : provName}]]</span>
+        </div>
+        <div class="d-flex mb-2">
+          <span class="fw-bold text-secondary" style="min-width: 150px; font-size: 1rem;">Years</span>
+          <span class="me-3">:</span>
+          <span class="text-dark fw-semibold">[[${m.years == '0' ? 'All Years' : m.years}]]</span>
+        </div>
+        <div class="d-flex mb-2">
+          <span class="fw-bold text-secondary" style="min-width: 150px; font-size: 1rem;">Points Processed</span>
+          <span class="me-3">:</span>
+          <span class="text-dark fw-semibold" th:text="${m.points_processed}"></span>
+        </div>
+        <div class="d-flex mb-2">
+          <span class="fw-bold text-secondary" style="min-width: 150px; font-size: 1rem;">Total Clusters</span>
+          <span class="me-3">:</span>
+          <span class="text-dark fw-semibold" th:text="${m.total_clusters}"></span>
+        </div>
+        <div class="d-flex mb-2">
+          <span class="fw-bold text-secondary" style="min-width: 150px; font-size: 1rem;">Noise%</span>
+          <span class="me-3">:</span>
+          <span class="text-dark fw-semibold">[[${m.noise_percentage}]]%</span>
+        </div>
+        <div class="d-flex mb-2">
+          <span class="fw-bold text-secondary" style="min-width: 150px; font-size: 1rem;">DBI</span>
+          <span class="me-3">:</span>
+          <span class="text-dark fw-semibold" th:text="${m.dbi}"></span>
+        </div>
+        <div class="d-flex mb-3">
+          <span class="fw-bold text-secondary" style="min-width: 150px; font-size: 1rem;">Trained Date</span>
+          <span class="me-3">:</span>
+          <span class="text-dark fw-semibold" th:text="${m.trained_date_time}"></span>
         </div>
       </div>
+
+      <div class="mt-4 text-center">
+        <button type="button" onclick="goBack()" class="btn btn-secondary btn-sm fw-bold px-3">
+          <i class="fas fa-arrow-left me-2"></i>Back to model list
+        </button>
+      </div>
     </div>
-    <div class="col-lg-7">
-      <div id="riskMap" class="shadow-sm"></div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-sky py-3 mb-3 d-flex justify-content-between align-items-center">
+      <h4 class="fw-bold"><i class="fas fa-list-ol me-2"></i>Risk Rankings</h4>
+
+      <select id="pFilter" class="form-select form-select-sm" style="width: 250px;"
+              onchange="updateProvince()"
+              th:disabled="${m.provinces != '0'}">
+        <option value="0" th:selected="${selP == '0'}">All Provinces</option>
+        <option th:each="p : ${provinces}"
+                th:value="${p.province_id}"
+                th:text="${p.province_en}"
+                th:selected="${#strings.toString(p.province_id) == selP}">
+        </option>
+      </select>
+    </div>
+    <div class="card-body p-0">
+      <div id="riskMap" style="height: 600px; width: 100%;" class="rounded shadow-sm"></div>
+    </div>
+  </div>
+
+  <div class="card border-1 shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 border-1">
+        <thead class="table-light sticky-top">
+        <tr>
+          <th class="ps-3">No.</th>
+          <th>Province</th>
+          <th>City</th>
+          <th class="cursor-pointer" onclick="sortTable()">
+            Score <i class="fas fa-sort ms-1"></i>
+          </th>
+          <th>Risk</th>
+        </tr>
+        </thead>
+        <tbody id="riskBody">
+        <tr th:if="${#lists.isEmpty(risks)}">
+          <td colspan="5" class="text-center py-5">
+            <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
+            <p class="text-muted fw-bold">No Records Found</p>
+          </td>
+        </tr>
+
+        <tr th:each="r, rStat : ${risks}" th:data-idx="${rStat.index}" th:if="${not #lists.isEmpty(risks)}">
+          <td class="row-no ps-3" th:text="${rStat.count}"></td>
+          <td th:text="${r.provinceName}"></td>
+          <td th:text="${r.cityName}"></td>
+          <td th:text="${r.score}" th:data-val="${r.scoreValue}"></td>
+          <td>
+                        <span th:text="${r.riskLevel}" th:data-level="${r.riskLevel}"
+                              th:class="'badge ' + ${r.riskLevel == 'High Risk' ? 'bg-danger' : (r.riskLevel == 'Medium Risk' ? 'bg-warning' : (r.riskLevel == 'Low Risk' ? 'bg-info' : 'bg-success'))}">
+                        </span>
+          </td>
+        </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -101,7 +233,7 @@
 
   // Function to format the tooltip string as requested
     function getTooltipContent(no, r) {
-        return `<b>No. ${no} Location;</b> ${r.cityName}, ${r.provinceName}<br><b>Score:</b> ${r.score}<br><b>Risk level:</b> ${r.riskLevel}`;
+        return `<b>No. ${no}<br>Location;</b> ${r.cityName}, ${r.provinceName}<br><b>Score:</b> ${r.score}<br><b>Risk level:</b> ${r.riskLevel}`;
     }
 
     // Initialize markers and store them by their city name
@@ -163,6 +295,17 @@
       const pId = document.getElementById('pFilter').value;
       const mId = [[${m.model_id}]];
       location.href = `/admin/models/detail/${mId}?provinceId=${pId}`;
+  }
+
+  function goBack() {
+    // Check if there is a history to go back to
+    if (window.history.length > 1) {
+        window.history.back();
+    } else {
+        // Fallback: If no history exists (e.g., user opened link in new tab),
+        // redirect to the specific models page
+        window.location.href = '/admin/models';
+    }
   }
 </script>
 </body>
