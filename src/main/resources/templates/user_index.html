@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <title>Lumina | Safety Portal</title>
+  <link rel="icon" type="image/png" href="/images/lumina-logo.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    :root { --sky-blue: #f0faff; --deep-sky: #00aaff; }
+    body { background: var(--sky-blue); font-family: 'Poppins', sans-serif; color: #444; }
+    .hero-section { background: linear-gradient(135deg, #87CEEB 0%, #87CEEB 100%); padding: 60px 0; color: white; border-radius: 0 0 50px 50px; }
+    .search-card { border-radius: 20px; border: none; transform: translateY(-40px); transition: 0.3s; }
+    .risk-card { display: none; border-radius: 20px; border: none; overflow: hidden; }
+    .risk-header { padding: 20px; font-weight: bold; text-align: center; font-size: 1.5rem; }
+    .bg-sky { background-color: #87CEEB !important; color: white !important; }
+
+    /* Risk Level Colors */
+    .bg-high { background: #ff4d4d; color: white; }
+    .bg-medium { background: #ffa500; color: white; }
+    .bg-low { background: #00d2ff; color: white; }
+    .bg-rare { background: #2ecc71; color: white; }
+
+    .suggestion-box { background: #f8f9fa; border-left: 5px solid; padding: 15px; margin-top: 15px; }
+  </style>
+</head>
+<body>
+
+<div class="hero-section text-center">
+  <img src="/images/lumina-logo.png" class="rounded-circle mb-3 shadow" style="width: 90px; height: 90px; background: white; padding: 5px;">
+  <h1 class="fw-bold">Lumina Safety Portal</h1>
+  <p class="lead">Check real-time crime concentration and stay informed.</p>
+</div>
+
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-md-6 col-lg-4">
+      <div class="card search-card shadow-lg p-4">
+        <div class="mb-3">
+          <label class="form-label fw-bold text-muted">Select Province</label>
+          <select id="provinceSelect" class="form-select form-select-md" onchange="loadCities()">
+            <option value="0">Municipality</option>
+            <option th:each="p : ${provinces}" th:value="${p.province_id}" th:text="${p.province_en}"></option>
+          </select>
+        </div>
+        <div class="mb-4">
+          <label class="form-label fw-bold text-muted">Select City</label>
+          <select id="citySelect" class="form-select form-select-md">
+            <option value="">-- Choose City --</option>
+          </select>
+        </div>
+        <button class="btn bg-sky btn-md fw-bold rounded-pill" onclick="viewRisk()">
+          <i class="fas fa-search-location me-2"></i> VIEW RISK LEVEL
+        </button>
+      </div>
+
+      <div id="resultArea" class="card risk-card shadow-lg mb-5">
+        <div id="riskHeader" class="risk-header"></div>
+
+        <div class="card-body">
+          <div class="text-center mb-3">
+            <h5 class="mb-0 fw-bold text-muted" id="displayCity"></h5>
+            <p class="text-muted small fw-bold" id="displayProvince"></p>
+          </div>
+
+          <hr class="opacity-25">
+
+          <div id="suggestionBox" class="suggestion-box">
+            <h6 class="fw-bold text-muted"><i class="fas fa-shield-alt me-2"></i> Safety Recommendations</h6>
+            <ul id="suggestionList" class="mb-0 small ps-3 text-muted"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Load cities on page load for the default "No Province" option
+  window.onload = loadCities;
+
+  async function loadCities() {
+    const pId = document.getElementById('provinceSelect').value;
+    const citySelect = document.getElementById('citySelect');
+    const res = await fetch(`/api/cities?provinceId=${pId}`);
+    const cities = await res.json();
+
+    citySelect.innerHTML = '<option value="">-- Choose City --</option>';
+    cities.forEach(c => {
+        // Use ID for value, Name for display
+        citySelect.innerHTML += `<option value="${c.city_id}">${c.city_en}</option>`;
+    });
+  }
+
+  async function viewRisk() {
+    const citySelect = document.getElementById('citySelect');
+    const cityId = citySelect.value;
+
+    // Get Province Name from the text of the selected province option
+    const provName = document.getElementById('provinceSelect').options[document.getElementById('provinceSelect').selectedIndex].text;
+
+    if (!cityId) return alert("Please select a city!");
+
+    const formData = new URLSearchParams();
+    formData.append('cityId', cityId);
+
+    const res = await fetch('/api/check-risk', { method: 'POST', body: formData });
+    const data = await res.json();
+
+    if (data.status === 'success') {
+        // Pass all 4 variables to the display function
+        displayResult(data.risk, data.score, data.cityName, provName);
+    } else {
+        alert(data.message);
+    }
+  }
+
+  function displayResult(risk, score, cityName, provinceName) {
+    const area = document.getElementById('resultArea');
+    const header = document.getElementById('riskHeader');
+    const citySpan = document.getElementById('displayCity');
+    const provSpan = document.getElementById('displayProvince');
+    const suggestionList = document.getElementById('suggestionList');
+
+    // Basic Setup
+    area.style.display = 'block';
+    header.className = 'risk-header';
+    citySpan.innerText = cityName;
+    provSpan.innerText = provinceName;
+    suggestionList.innerHTML = ""; // Clear old suggestions
+
+    let suggestions = [];
+
+    if (risk === "High Risk") {
+        header.classList.add('bg-high');
+        header.innerText = "Crime Concentration: High";
+        suggestions = [
+            "Avoid walking alone after sunset; use reputable taxi services.",
+            "Keep high-value electronics and jewelry out of sight.",
+            "Be extra vigilant at ATMs and avoid carrying large amounts of cash.",
+            "Stay in well-lit, populated main streets.",
+            "Inform someone of your itinerary when exploring new areas."
+        ];
+    } else if (risk === "Medium Risk") {
+        header.classList.add('bg-medium');
+        header.innerText = "Crime Concentration: Medium";
+        suggestions = [
+            "Maintain general awareness of your surroundings, especially in crowds.",
+            "Keep vehicle doors locked and windows rolled up while driving.",
+            "Avoid displaying signs of wealth in public transit areas.",
+            "Check local news for any temporary safety alerts in this district.",
+            "Secure your residential entry points properly at night."
+        ];
+    } else if (risk === "Low Risk") {
+        header.classList.add('bg-low');
+        header.innerText = "Crime Concentration: Low";
+        suggestions = [
+            "This is a relatively safe area; normal precautions apply.",
+            "Ensure your vehicle is locked when parked in public spaces.",
+            "Carry a charged phone and a portable power bank for emergencies.",
+            "Stay aware of local emergency contact numbers.",
+            "Participate in community safety programs if you are a resident."
+        ];
+    } else {
+        header.classList.add('bg-rare');
+        header.innerText = "Crime Concentration: Very Rare";
+        suggestions = [
+            "Excellent safety levels detected here.",
+            "Continue to follow basic security common sense.",
+            "Ideal location for evening walks and outdoor activities.",
+            "Share your positive safety experience with the community.",
+            "Maintain standard home security measures as a formality."
+        ];
+    }
+
+    // Inject suggestions as list items
+    suggestions.forEach(text => {
+        const li = document.createElement('li');
+        li.className = "mb-2";
+        li.innerText = text;
+        suggestionList.appendChild(li);
+    });
+
+    // Match suggestion box border to the header color
+    const headerColor = getComputedStyle(header).backgroundColor;
+    document.getElementById('suggestionBox').style.borderColor = headerColor;
+
+    // Scroll to result
+    area.scrollIntoView({ behavior: 'smooth' });
+  }
+</script>
+
+</body>
+</html>
